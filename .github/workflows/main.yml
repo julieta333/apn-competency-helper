@@ -1,11 +1,23 @@
 name: Run MSP Helper
 
 on:
-  workflow_dispatch: # Permite ejecutarlo manualmente desde la pestaña Actions
+  workflow_dispatch:
+    inputs:
+      designation:
+        description: 'Programa/Competencia (p.ej. AWS Managed Service Provider)'
+        required: true
+        default: 'AWS Managed Service Provider'
+      track:
+        description: 'Track (p.ej. consulting)'
+        required: true
+        default: 'consulting'
 
 jobs:
   run-helper:
     runs-on: ubuntu-latest
+    env:
+      DESIGNATION: ${{ github.event.inputs.designation }}
+      TRACK: ${{ github.event.inputs.track }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -18,5 +30,8 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Run MSP Helper
-        run: npm start
+      - name: Build
+        run: npm run build
+
+      - name: Run MSP Helper (non-interactive)
+        run: npm run start
