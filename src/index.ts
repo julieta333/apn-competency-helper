@@ -1,6 +1,6 @@
-import * as fs from "fs"
-import ExcelJS from "exceljs"
-import { test, rm, mkdir, cp } from "shelljs"
+import * as fs from "fs";
+import ExcelJS from "exceljs";
+import { test, rm, mkdir, cp } from "shelljs";
 import {
   AlignmentType,
   BorderStyle,
@@ -8,81 +8,77 @@ import {
   HeadingLevel,
   Packer,
   Paragraph
-} from "docx"
-import pptxgen from "pptxgenjs"
-import { zip } from "zip-a-folder"
-import axios from "axios"
-const { AutoComplete, Select } = require("enquirer")
+} from "docx";
+import pptxgen from "pptxgenjs";
+import { zip } from "zip-a-folder";
+import axios from "axios";
+const { AutoComplete, Select } = require("enquirer");
 
-async function main(): Promise<void> {  
-  const fromCI = process.env.GITHUB_ACTIONS === 'true';
+async function main(): Promise<void> {
+  const fromCI = process.env.GITHUB_ACTIONS === "true";
   const ciDesignation = process.env.DESIGNATION;
-  const ciTrack = (process.env.TRACK || 'consulting') as string;
+  const ciTrack = (process.env.TRACK || "consulting") as string;
+
+  const competencies: any = require("./competencies.json");
+
+  let competency: string;
+  let partnerType: string;
 
   if (fromCI && ciDesignation) {
     console.log(`CI mode → designation="${ciDesignation}", track="${ciTrack}"`);
+    competency = ciDesignation;
+    partnerType = ciTrack;
+  } else {
+    const prompt = new AutoComplete({
+      name: "competency",
+      message: "Choose a designation/competency",
+      limit: 10,
+      choices: Object.keys(competencies)
+    });
 
-    // Llamada directa a la función que genera las evidencias
-    await require('./createEvidence').default(ciDesignation, ciTrack);
+    competency = await prompt.run();
 
-    return;
+    const prompt2 = new Select({
+      name: "partnerType",
+      message: "What is the type of Partner?",
+      choices: Object.keys(competencies[competency])
+    });
+
+    partnerType = await prompt2.run();
   }
 
-  const competencies: any = require("./competencies.json")
+  const urls: any = competencies[competency][partnerType];
+  const outDir = "var/out/" + competency;
 
-  //Prompt
-
-  const prompt = new AutoComplete({
-    name: "flavor",
-    message: "Pick your favorite flavor",
-    limit: 10,
-    choices: Object.keys(competencies)
-  })
-
-  const competency = await prompt.run()
-  const choices2 = Object.keys(competencies[competency])
-
-  const prompt2 = new Select({
-    name: "partnerType",
-    message: "What is the type of Partner?",
-    choices: choices2
-  })
-
-  const partnerType = await prompt2.run()
-  const urls: any = competencies[competency][partnerType]
-  const outDir = "var/out/" + competency
-
-  //Cleaning
+  // Cleaning
   if (test("-d", "var")) {
-    rm("-rf", "var")
+    rm("-rf", "var");
   }
+  mkdir("var", "var/in", "var/out", outDir);
 
-  mkdir("var", "var/in", "var/out", outDir)
-
-  //Download checklist
+  // Download checklist
   const response = await axios({
     method: "GET",
     url: urls.checklistUrl,
-    responseType: "stream"
-  })
+    responseType: "arraybuffer"
+  });
+  const filename = "var/in/" + competency + ".xlsx";
+  await fs.promises.writeFile(filename, response.data);
 
-  const filename = "var/in/" + competency + ".xlsx"
-  await fs.promises.writeFile(filename, response.data)
+  // Presentation
+  let pres = new pptxgen();
+  pres.layout = "LAYOUT_WIDE";
 
-  //Presentation
-  let pres = new pptxgen()
-  pres.layout = "LAYOUT_WIDE"
-
-  //First Slide
-  const firstSlide = pres.addSlide()
-  firstSlide.background = { color: "FF9900" }
+  // First Slide
+  const firstSlide = pres.addSlide();
+  firstSlide.background = { color: "FF9900" };
   firstSlide.addImage({
     path: "./assets/AWS_logo_RGB_WHT.png",
     x: 12,
     y: 0.3,
     h: 0.6,
     w: 0.9
-  })
+  });
   firstSlide.addText("APN Competency Program", {
     x: 0.5,
     y: 2.5,
@@ -90,7 +86,7 @@ async function main(): Promise<void> {
     w: "80%",
     fontSize: 24,
     color: "FFFFFF"
-  })
+  });
   firstSlide.addText(competency, {
     x: 0.5,
     y: 3.25,
@@ -98,7 +94,7 @@ async function main(): Promise<void> {
     w: "80%",
     fontSize: 48,
     color: "FFFFFF"
-  })
+  });
 
   pres.defineSlideMaster({
     title: "PLACEHOLDER_SLIDE",
@@ -160,114 +156,92 @@ async function main(): Promise<void> {
       }
     ],
     slideNumber: { x: 12.3, y: "95%", fontSize: 11, align: "right" }
-  })
+  });
 
-  //Reading the workbook
-  const workbook = new ExcelJS.Workbook()
-  await workbook.xlsx.readFile(filename)
+  // Reading the workbook
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(filename);
 
   workbook.eachSheet((worksheet, sheetId) => {
-    if (sheetId === 1) {
-      return
-    }
-    mkdir(outDir + "/" + worksheet.name)
+    if (sheetId === 1) return;
 
-    worksheet.eachRow((row, rowNumber) => {
-      row.eachCell(function (cell, colNumber) {
-        if (row.actualCellCount === 2) {
-          if (colNumber === 1) {
-            const id: any = competency + " - " + cell.value
+    mkdir(outDir + "/" + worksheet.name);
 
-            const nextCell: any = row.getCell(2) ?? {}
-            let head: string = nextCell.value.richText[0].text
-            head = head.replace("/", " - ")
+    worksheet.eachRow((row) => {
+      row.eachCell((cell, colNumber) => {
+        if (row.actualCellCount === 2 && colNumber === 1) {
+          const id: any = competency + " - " + cell.value;
+          const nextCell: any = row.getCell(2) ?? {};
+          let head: string = nextCell.value.richText[0].text;
+          head = head.replace("/", " - ");
 
-            //Split text by \n and create paragraphs
-            const descriptionCellValue = nextCell.value.richText[1].text
-            const descriptionLiterals: any = descriptionCellValue.split("\n")
-            const descriptionParagraphs: any = []
+          // Split description
+          const descriptionCellValue = nextCell.value.richText[1].text;
+          const descriptionParagraphs = descriptionCellValue
+            .split("\n")
+            .map((line: string) =>
+              new Paragraph({
+                text: line,
+                alignment: AlignmentType.JUSTIFIED
+              })
+            );
 
-            descriptionLiterals.map((descriptionLiteral: string) => {
-              descriptionParagraphs.push(
-                new Paragraph({
-                  text: descriptionLiteral,
-                  alignment: AlignmentType.JUSTIFIED
-                })
-              )
-            })
+          mkdir(outDir + "/" + worksheet.name + "/" + id + " " + head);
 
-            mkdir(outDir + "/" + worksheet.name + "/" + id + " " + head)
-
-            //Build Document
-            const doc = new Document({
-              sections: [
-                {
-                  properties: {},
-                  children: [
-                    new Paragraph({
-                      text: id,
-                      heading: HeadingLevel.TITLE
-                    }),
-                    new Paragraph({
-                      text: head,
-                      heading: HeadingLevel.HEADING_1
-                    }),
-                    ...descriptionParagraphs,
-                    new Paragraph({
-                      border: {
-                        bottom: {
-                          color: "auto",
-                          space: 1,
-                          style: BorderStyle.SINGLE,
-                          size: 6
-                        }
+          // Build Document
+          const doc = new Document({
+            sections: [
+              {
+                properties: {},
+                children: [
+                  new Paragraph({ text: id, heading: HeadingLevel.TITLE }),
+                  new Paragraph({ text: head, heading: HeadingLevel.HEADING_1 }),
+                  ...descriptionParagraphs,
+                  new Paragraph({
+                    border: {
+                      bottom: {
+                        color: "auto",
+                        space: 1,
+                        style: BorderStyle.SINGLE,
+                        size: 6
                       }
-                    })
-                  ]
-                }
-              ]
-            })
+                    }
+                  })
+                ]
+              }
+            ]
+          });
 
-            //Write document
-            Packer.toBuffer(doc).then((buffer) => {
-              fs.writeFileSync(
-                outDir +
-                  "/" +
-                  worksheet.name +
-                  "/" +
-                  id +
-                  " " +
-                  head +
-                  "/" +
-                  id +
-                  ".docx",
-                buffer
-              )
-            })
+          // Write DOCX
+          Packer.toBuffer(doc).then((buffer) => {
+            fs.writeFileSync(
+              `${outDir}/${worksheet.name}/${id} ${head}/${id}.docx`,
+              buffer
+            );
+          });
 
-            //Add slide for the general presentation
-            let slide = pres.addSlide({ masterName: "PLACEHOLDER_SLIDE" })
-            slide.addText(id + " " + head, { placeholder: "head" })
-            slide.addText(descriptionCellValue, { placeholder: "description" })
-          }
+          // Add slide
+          let slide = pres.addSlide({ masterName: "PLACEHOLDER_SLIDE" });
+          slide.addText(id + " " + head, { placeholder: "head" });
+          slide.addText(descriptionCellValue, { placeholder: "description" });
         }
-      })
-    })
-  })
+      });
+    });
+  });
 
-  //Copy a version of the self service checklist
-  cp(filename, outDir + "/" + competency + ".xlsx")
+  // Copy checklist
+  cp(filename, outDir + "/" + competency + ".xlsx");
 
-  //Last slide
-  const lastSlide = pres.addSlide()
-  lastSlide.background = { color: "FF9900" }
+  // Last slide
+  const lastSlide = pres.addSlide();
+  lastSlide.background = { color: "FF9900" };
   lastSlide.addImage({
     path: "./assets/AWS_logo_RGB_WHT.png",
     x: 12,
     y: 0.3,
     h: 0.6,
     w: 0.9
-  })
+  });
   lastSlide.addText("APN Competency Program", {
     x: 0.5,
     y: 2.5,
@@ -275,7 +249,7 @@ async function main(): Promise<void> {
     w: "80%",
     fontSize: 24,
     color: "FFFFFF"
-  })
+  });
   lastSlide.addText("Thank you!", {
     x: 0.5,
     y: 3.25,
@@ -283,17 +257,17 @@ async function main(): Promise<void> {
     w: "80%",
     fontSize: 48,
     color: "FFFFFF"
-  })
+  });
 
-  //Write the presentation
-  await pres.writeFile({ fileName: outDir + "/presentation.pptx" })
+  // Write presentation
+  await pres.writeFile({ fileName: outDir + "/presentation.pptx" });
 
-  //Zip the whole thing
-  await zip(outDir, "./var/" + competency + ".zip")
+  // Zip everything
+  await zip(outDir, "./var/" + competency + ".zip");
 
-  //Clean
-  rm("-rf", "var/in")
-  rm("-rf", "var/out")
+  // Clean
+  rm("-rf", "var/in");
+  rm("-rf", "var/out");
 }
 
-main().catch(console.error)
+main().catch(console.error);
