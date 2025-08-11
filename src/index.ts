@@ -14,7 +14,20 @@ import { zip } from "zip-a-folder"
 import axios from "axios"
 const { AutoComplete, Select } = require("enquirer")
 
-async function main(): Promise<void> {
+async function main(): Promise<void> {  
+  const fromCI = process.env.GITHUB_ACTIONS === 'true';
+  const ciDesignation = process.env.DESIGNATION;
+  const ciTrack = (process.env.TRACK || 'consulting') as string;
+
+  if (fromCI && ciDesignation) {
+    console.log(`CI mode → designation="${ciDesignation}", track="${ciTrack}"`);
+
+    // Llamada directa a la función que genera las evidencias
+    await require('./createEvidence').default(ciDesignation, ciTrack);
+
+    return;
+  }
+
   const competencies: any = require("./competencies.json")
 
   //Prompt
