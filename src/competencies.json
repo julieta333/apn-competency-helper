@@ -1,4 +1,17 @@
 {
+  "AWS Managed Service Provider": {
+    "consulting": {
+      "competencyUrl": "https://apn-checklists.s3.amazonaws.com/managed-service-provider/CAkF0A-Uf.html",
+      "checklistUrl": "https://apn-checklists.s3.amazonaws.com/managed-service-provider/AWS%20Managed%20Service%20Provider%20(MSP)%20Program%20Self-Assessment.xlsx"
+    }
+  },
+  "AWS Migration": {
+    "consulting": {
+      "competencyUrl": "URL_DE_LA_MIGRATION",
+      "checklistUrl": "URL_DEL_EXCEL_DE_MIGRATION"
+    }
+  }
+},
   "AWS DevOps Competency": {
     "consulting": {
       "competencyUrl": "https://apn-checklists.s3.amazonaws.com/competency/devops/consulting/Cm5yq5ehT.html",
