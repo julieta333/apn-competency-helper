@@ -12,42 +12,24 @@ import {
 import pptxgen from "pptxgenjs";
 import { zip } from "zip-a-folder";
 import axios from "axios";
-const { AutoComplete, Select } = require("enquirer");
 
 async function main(): Promise<void> {
-  const fromCI = process.env.GITHUB_ACTIONS === "true";
-  const ciDesignation = process.env.DESIGNATION;
-  const ciTrack = (process.env.TRACK || "consulting") as string;
+  // Forzamos MSP y evitamos prompts / selección
+  const competency = "Managed Service Provider (MSP)";
 
-  const competencies: any = require("./competencies.json");
-
-  let competency: string;
-  let partnerType: string;
-
-  if (fromCI && ciDesignation) {
-    console.log(`CI mode → designation="${ciDesignation}", track="${ciTrack}"`);
-    competency = ciDesignation;
-    partnerType = ciTrack;
-  } else {
-    const prompt = new AutoComplete({
-      name: "competency",
-      message: "Choose a designation/competency",
-      limit: 10,
-      choices: Object.keys(competencies)
-    });
-
-    competency = await prompt.run();
-
-    const prompt2 = new Select({
-      name: "partnerType",
-      message: "What is the type of Partner?",
-      choices: Object.keys(competencies[competency])
-    });
-
-    partnerType = await prompt2.run();
+  // Leemos la config desde competencies.json (en la raíz)
+  const competencies: any = require("../competencies.json");
+  const cfg = competencies[competency];
+  if (!cfg || !cfg.spreadsheetId) {
+    throw new Error(
+      `No encuentro configuración para "${competency}" en competencies.json`
+    );
   }
 
-  const urls: any = competencies[competency][partnerType];
+  // Construimos la URL de descarga directa a XLSX desde el spreadsheetId
+  const checklistUrl = `https://docs.google.com/spreadsheets/d/${cfg.spreadsheetId}/export?format=xlsx`;
+  const startWorksheetIndex: number = cfg.startWorksheetIndex ?? 1;
+
   const outDir = "var/out/" + competency;
 
   // Cleaning
@@ -59,7 +41,7 @@ async function main(): Promise<void> {
   // Download checklist
   const response = await axios({
     method: "GET",
-    url: urls.checklistUrl,
+    url: checklistUrl,
     responseType: "arraybuffer"
   });
   const filename = "var/in/" + competency + ".xlsx";
@@ -163,7 +145,8 @@ async function main(): Promise<void> {
   await workbook.xlsx.readFile(filename);
 
   workbook.eachSheet((worksheet, sheetId) => {
-    if (sheetId === 1) return;
+    // Saltamos hojas previas si aplica (por defecto, salta solo la 1)
+    if (sheetId < startWorksheetIndex) return;
 
     mkdir(outDir + "/" + worksheet.name);
 
